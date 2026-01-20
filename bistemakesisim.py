@@ -6,42 +6,43 @@ import yfinance as yf
 # Streamlit Ayarları
 # -------------------------------------------------
 st.set_page_config(
-    page_title="BIST EMA Tarayıcı",
+    page_title="BIST EMA 9 / EMA 21 Tarayıcı",
     layout="wide"
 )
 
 st.title("BIST EMA(9) / EMA(21) Yukarı Kesişim Tarayıcı")
+st.caption("Veri kaynağı: Yahoo Finance")
 
 # -------------------------------------------------
 # Timeframe Seçimi
 # -------------------------------------------------
-TIMEFRAMES = {
+TIMEFRAME_OPTIONS = {
     "15 Dakika": "15m",
     "1 Saat": "1h",
     "4 Saat": "4h",
     "1 Gün": "1d",
 }
 
-tf_label = st.selectbox(
+selected_label = st.selectbox(
     "Zaman Dilimi",
-    list(TIMEFRAMES.keys()),
+    list(TIMEFRAME_OPTIONS.keys()),
     index=1
 )
 
-TIMEFRAME = TIMEFRAMES[tf_label]
+TIMEFRAME = TIMEFRAME_OPTIONS[selected_label]
 
 # -------------------------------------------------
-# Hisse Listesi (Excel - TAM DOSYA YOLU)
+# BIST Hisse Listesi (Excel)
 # -------------------------------------------------
-EXCEL_PATH = r"C:\Users\ASUS\OneDrive\Desktop\bist\hisse_kodu.xlsx"
+@st.cache_data
+def load_symbols():
+    df = pd.read_excel("hisse_kodu.xlsx")
+    return df["hisse_kodu"].dropna().unique().tolist()
 
-df_symbols = pd.read_excel(EXCEL_PATH)
-
-# Excel sütun adı: hisse_kodu
-symbols = (df_symbols["hisse_kodu"].astype(str) + ".IS").tolist()
+symbols = load_symbols()
 
 # -------------------------------------------------
-# EMA Kesişim Fonksiyonu
+# EMA Kesişim Kontrolü
 # -------------------------------------------------
 def ema_crossover(df):
     df["ema9"] = df["Close"].ewm(span=9, adjust=False).mean()
@@ -57,32 +58,33 @@ def ema_crossover(df):
 # -------------------------------------------------
 results = []
 
-if st.button("Taramayı Başlat"):
-    with st.spinner("BIST hisseleri taranıyor..."):
-        for symbol in symbols:
-            try:
-                df = yf.download(
-                    symbol,
-                    period="3mo",
-                    interval=TIMEFRAME,
-                    progress=False
-                )
+with st.spinner("BIST hisseleri taranıyor..."):
+    for symbol in symbols:
+        try:
+            ticker = yf.Ticker(f"{symbol}.IS")
+            df = ticker.history(period="3mo", interval=TIMEFRAME)
 
-                if df is not None and len(df) >= 21:
-                    if ema_crossover(df):
-                        results.append(symbol)
+            if df.empty or len(df) < 21:
+                continue
 
-            except Exception:
-                pass
+            if ema_crossover(df):
+                results.append({
+                    "Hisse": symbol,
+                    "Timeframe": TIMEFRAME
+                })
 
-    # -------------------------------------------------
-    # Sonuçlar
-    # -------------------------------------------------
-    if results:
-        st.success(f"{len(results)} hisse bulundu")
-        st.dataframe(
-            pd.DataFrame(results, columns=["Hisse"]),
-            use_container_width=True
-        )
-    else:
-        st.warning("Şartları sağlayan hisse bulunamadı.")
+        except Exception:
+            continue
+
+# -------------------------------------------------
+# Sonuçlar
+# -------------------------------------------------
+st.subheader("Tespit Edilen Hisseler")
+
+if results:
+    st.dataframe(
+        pd.DataFrame(results),
+        use_container_width=True
+    )
+else:
+    st.warning("Seçilen timeframe için EMA(9) yukarı kesişimi bulunamadı.")
