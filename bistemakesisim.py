@@ -34,12 +34,16 @@ def calculate_ema(df):
     return df
 
 def is_crossover(df):
-    prev = df.iloc[-3]   # önceki kapanış
-    last = df.iloc[-2]   # son kapanış
+    if len(df) < 2:
+        return False
+    prev = df.iloc[-2]   # sondan bir önceki kapanış
+    last = df.iloc[-1]   # en son kapanış
     return prev["ema9"] < prev["ema21"] and last["ema9"] > last["ema21"]
 
 def is_ema9_above_ema21(df):
-    last = df.iloc[-2]
+    if len(df) < 1:
+        return False
+    last = df.iloc[-1]
     return last["ema9"] > last["ema21"]
 
 # -------------------------------------------------
@@ -58,20 +62,19 @@ with st.spinner("BIST hisseleri taranıyor (1D)..."):
                 continue
 
             df = calculate_ema(df)
-            last = df.iloc[-2]
 
             if is_crossover(df):
                 crossover_results.append({
                     "Hisse": symbol,
-                    "EMA9": round(last["ema9"], 2),
-                    "EMA21": round(last["ema21"], 2)
+                    "EMA9": round(df.iloc[-1]["ema9"], 2),
+                    "EMA21": round(df.iloc[-1]["ema21"], 2)
                 })
 
             if is_ema9_above_ema21(df):
                 trend_results.append({
                     "Hisse": symbol,
-                    "EMA9": round(last["ema9"], 2),
-                    "EMA21": round(last["ema21"], 2)
+                    "EMA9": round(df.iloc[-1]["ema9"], 2),
+                    "EMA21": round(df.iloc[-1]["ema21"], 2)
                 })
 
         except Exception:
