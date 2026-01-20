@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("BIST EMA(9) / EMA(21) Tarayıcı")
-st.caption("Veri kaynağı: Yahoo Finance (kapanan mumlar)")
+st.caption("Kapanmış mumlara göre hesaplanır | Veri: Yahoo Finance")
 
 # -------------------------------------------------
 # Timeframe Seçimi
@@ -32,7 +32,7 @@ selected_label = st.selectbox(
 TIMEFRAME = TIMEFRAME_OPTIONS[selected_label]
 
 # -------------------------------------------------
-# BIST Hisse Listesi
+# BIST Hisse Listesi (Excel)
 # -------------------------------------------------
 @st.cache_data
 def load_symbols():
@@ -50,12 +50,12 @@ def calculate_ema(df):
     return df
 
 def is_crossover(df):
-    prev = df.iloc[-2]
-    last = df.iloc[-1]
+    prev = df.iloc[-3]   # bir önceki kapanmış mum
+    last = df.iloc[-2]   # son kapanmış mum
     return prev["ema9"] < prev["ema21"] and last["ema9"] > last["ema21"]
 
 def is_ema9_above_ema21(df):
-    last = df.iloc[-1]
+    last = df.iloc[-2]   # SADECE kapanmış mum
     return last["ema9"] > last["ema21"]
 
 # -------------------------------------------------
@@ -68,34 +68,36 @@ with st.spinner("BIST hisseleri taranıyor..."):
     for symbol in symbols:
         try:
             ticker = yf.Ticker(f"{symbol}.IS")
-            df = ticker.history(period="3mo", interval=TIMEFRAME)
+            df = ticker.history(period="6mo", interval=TIMEFRAME)
 
-            if df.empty or len(df) < 21:
+            if df.empty or len(df) < 30:
                 continue
 
             df = calculate_ema(df)
 
+            last = df.iloc[-2]
+
             if is_crossover(df):
                 crossover_results.append({
                     "Hisse": symbol,
-                    "EMA9": round(df.iloc[-1]["ema9"], 2),
-                    "EMA21": round(df.iloc[-1]["ema21"], 2)
+                    "EMA9": round(last["ema9"], 2),
+                    "EMA21": round(last["ema21"], 2)
                 })
 
             if is_ema9_above_ema21(df):
                 trend_results.append({
                     "Hisse": symbol,
-                    "EMA9": round(df.iloc[-1]["ema9"], 2),
-                    "EMA21": round(df.iloc[-1]["ema21"], 2)
+                    "EMA9": round(last["ema9"], 2),
+                    "EMA21": round(last["ema21"], 2)
                 })
 
         except Exception:
             continue
 
 # -------------------------------------------------
-# SONUÇLAR
+# Sonuçlar
 # -------------------------------------------------
-st.subheader("📈 EMA(9) → EMA(21) Yukarı Kesişim")
+st.subheader("📈 EMA(9) → EMA(21) Yukarı Kesişim (Kapanış Bazlı)")
 
 if crossover_results:
     st.dataframe(
@@ -105,7 +107,7 @@ if crossover_results:
 else:
     st.info("Yukarı kesişim bulunamadı.")
 
-st.subheader("📊 EMA(9) > EMA(21) Olan Hisseler")
+st.subheader("📊 EMA(9) > EMA(21) Olan Hisseler (Trend Devam)")
 
 if trend_results:
     st.dataframe(
