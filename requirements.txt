@@ -1,3 +1,6 @@
 streamlit
 pandas
 yfinance
+lxml
+html5lib
+xlrd

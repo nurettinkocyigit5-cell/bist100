@@ -2,73 +2,87 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-st.set_page_config(layout="wide")
-st.title("BIST EMA(9/21) Tarayıcı (Google Finance Kaynağına Yakın)")
+# -------------------------------------------------
+# Streamlit Ayarları
+# -------------------------------------------------
+st.set_page_config(
+    page_title="BIST EMA Tarayıcı",
+    layout="wide"
+)
+
+st.title("BIST EMA(9) / EMA(21) Yukarı Kesişim Tarayıcı")
 
 # -------------------------------------------------
-# Timeframe
+# Timeframe Seçimi
 # -------------------------------------------------
-INTERVAL = st.selectbox(
+TIMEFRAMES = {
+    "15 Dakika": "15m",
+    "1 Saat": "1h",
+    "4 Saat": "4h",
+    "1 Gün": "1d",
+}
+
+tf_label = st.selectbox(
     "Zaman Dilimi",
-    ["1h", "1d"],
+    list(TIMEFRAMES.keys()),
     index=1
 )
 
-# -------------------------------------------------
-# BIST Listesi
-# -------------------------------------------------
-@st.cache
-def get_bist_tickers():
-    url = "https://raw.githubusercontent.com/datasets/borsa-istanbul/master/data/bist100-listed-companies.csv"
-    df = pd.read_csv(url)
-    return [f"{sym}.IS" for sym in df["Ticker"]]
-
-symbols = get_bist_tickers()
+TIMEFRAME = TIMEFRAMES[tf_label]
 
 # -------------------------------------------------
-# EMA Fonksiyonu
+# Hisse Listesi (Excel - TAM DOSYA YOLU)
 # -------------------------------------------------
-def fetch_data(symbol):
-    try:
-        df = yf.download(symbol, period="6mo", interval=INTERVAL, progress=False)
-        if df.empty:
-            return None
-        return df
-    except:
-        return None
+EXCEL_PATH = r"C:\Users\ASUS\OneDrive\Desktop\bist\hisse_kodu.xlsx"
 
+df_symbols = pd.read_excel(EXCEL_PATH)
+
+# Excel sütun adı: hisse_kodu
+symbols = (df_symbols["hisse_kodu"].astype(str) + ".IS").tolist()
+
+# -------------------------------------------------
+# EMA Kesişim Fonksiyonu
+# -------------------------------------------------
 def ema_crossover(df):
-    df["EMA9"] = df["Close"].ewm(span=9, adjust=False).mean()
-    df["EMA21"] = df["Close"].ewm(span=21, adjust=False).mean()
-
-    if len(df) < 22:
-        return False
+    df["ema9"] = df["Close"].ewm(span=9, adjust=False).mean()
+    df["ema21"] = df["Close"].ewm(span=21, adjust=False).mean()
 
     prev = df.iloc[-2]
     last = df.iloc[-1]
-    return prev["EMA9"] < prev["EMA21"] and last["EMA9"] > last["EMA21"]
+
+    return prev["ema9"] < prev["ema21"] and last["ema9"] > last["ema21"]
 
 # -------------------------------------------------
 # Tarama
 # -------------------------------------------------
 results = []
 
-with st.spinner("BIST hisseleri taranıyor..."):
-    for symbol in symbols:
-        df = fetch_data(symbol)
-        if df is None:
-            continue
-        if ema_crossover(df):
-            results.append({
-                "Hisse": symbol.replace(".IS", ""),
-                "Son Fiyat": round(df["Close"].iloc[-1], 2),
-                "Zaman Dilimi": INTERVAL
-            })
+if st.button("Taramayı Başlat"):
+    with st.spinner("BIST hisseleri taranıyor..."):
+        for symbol in symbols:
+            try:
+                df = yf.download(
+                    symbol,
+                    period="3mo",
+                    interval=TIMEFRAME,
+                    progress=False
+                )
 
-# -------------------------------------------------
-# Sonuçlar
-# -------------------------------------------------
-if results:
-    st.dataframe(pd.DataFrame(results), use_container_width=True)
-else:
-    st.warning("EMA(9/21) yukarı kesişimi yapan BIST hissesi bulunamadı.")
+                if df is not None and len(df) >= 21:
+                    if ema_crossover(df):
+                        results.append(symbol)
+
+            except Exception:
+                pass
+
+    # -------------------------------------------------
+    # Sonuçlar
+    # -------------------------------------------------
+    if results:
+        st.success(f"{len(results)} hisse bulundu")
+        st.dataframe(
+            pd.DataFrame(results, columns=["Hisse"]),
+            use_container_width=True
+        )
+    else:
+        st.warning("Şartları sağlayan hisse bulunamadı.")
