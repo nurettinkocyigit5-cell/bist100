@@ -6,33 +6,17 @@ import yfinance as yf
 # Streamlit Ayarları
 # -------------------------------------------------
 st.set_page_config(
-    page_title="BIST EMA Tarayıcı",
+    page_title="BIST EMA 9 / EMA 21 (1D)",
     layout="wide"
 )
 
-st.title("BIST EMA(9) / EMA(21) Tarayıcı")
-st.caption("Kapanmış mumlara göre hesaplanır | Veri: Yahoo Finance")
+st.title("BIST EMA(9) / EMA(21) Tarayıcı – Günlük")
+st.caption("Sadece kapanmış günlük mumlar | Veri: Yahoo Finance")
+
+TIMEFRAME = "1d"
 
 # -------------------------------------------------
-# Timeframe Seçimi
-# -------------------------------------------------
-TIMEFRAME_OPTIONS = {
-    "15 Dakika": "15m",
-    "1 Saat": "1h",
-    "4 Saat": "4h",
-    "1 Gün": "1d",
-}
-
-selected_label = st.selectbox(
-    "Zaman Dilimi",
-    list(TIMEFRAME_OPTIONS.keys()),
-    index=1
-)
-
-TIMEFRAME = TIMEFRAME_OPTIONS[selected_label]
-
-# -------------------------------------------------
-# BIST Hisse Listesi (Excel)
+# BIST Hisse Listesi
 # -------------------------------------------------
 @st.cache_data
 def load_symbols():
@@ -50,12 +34,12 @@ def calculate_ema(df):
     return df
 
 def is_crossover(df):
-    prev = df.iloc[-3]   # bir önceki kapanmış mum
-    last = df.iloc[-2]   # son kapanmış mum
+    prev = df.iloc[-3]   # önceki kapanış
+    last = df.iloc[-2]   # son kapanış
     return prev["ema9"] < prev["ema21"] and last["ema9"] > last["ema21"]
 
 def is_ema9_above_ema21(df):
-    last = df.iloc[-2]   # SADECE kapanmış mum
+    last = df.iloc[-2]
     return last["ema9"] > last["ema21"]
 
 # -------------------------------------------------
@@ -64,17 +48,16 @@ def is_ema9_above_ema21(df):
 crossover_results = []
 trend_results = []
 
-with st.spinner("BIST hisseleri taranıyor..."):
+with st.spinner("BIST hisseleri taranıyor (1D)..."):
     for symbol in symbols:
         try:
             ticker = yf.Ticker(f"{symbol}.IS")
-            df = ticker.history(period="6mo", interval=TIMEFRAME)
+            df = ticker.history(period="1y", interval=TIMEFRAME)
 
             if df.empty or len(df) < 30:
                 continue
 
             df = calculate_ema(df)
-
             last = df.iloc[-2]
 
             if is_crossover(df):
@@ -97,22 +80,16 @@ with st.spinner("BIST hisseleri taranıyor..."):
 # -------------------------------------------------
 # Sonuçlar
 # -------------------------------------------------
-st.subheader("📈 EMA(9) → EMA(21) Yukarı Kesişim (Kapanış Bazlı)")
+st.subheader("📈 EMA(9) → EMA(21) Yukarı Kesişim (Günlük)")
 
 if crossover_results:
-    st.dataframe(
-        pd.DataFrame(crossover_results),
-        use_container_width=True
-    )
+    st.dataframe(pd.DataFrame(crossover_results), use_container_width=True)
 else:
     st.info("Yukarı kesişim bulunamadı.")
 
 st.subheader("📊 EMA(9) > EMA(21) Olan Hisseler (Trend Devam)")
 
 if trend_results:
-    st.dataframe(
-        pd.DataFrame(trend_results),
-        use_container_width=True
-    )
+    st.dataframe(pd.DataFrame(trend_results), use_container_width=True)
 else:
     st.info("EMA(9), EMA(21)'in üzerinde olan hisse bulunamadı.")
